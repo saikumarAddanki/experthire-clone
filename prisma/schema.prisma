@@ -1,0 +1,90 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id            String      @id @default(cuid())
+  name          String?
+  email         String      @unique
+  passwordHash  String
+  createdAt     DateTime    @default(now())
+  interviews    Interview[]
+  apiKeys       ApiKey[]
+}
+
+model ApiKey {
+  id               String    @id @default(cuid())
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  label            String?
+  key              String    @db.Text
+
+  // Rotation bookkeeping: least-recently-used key is tried first;
+  // a key hit by a 429 gets rateLimitedUntil set and is skipped until then.
+  lastUsedAt       DateTime?
+  rateLimitedUntil DateTime?
+
+  createdAt        DateTime  @default(now())
+
+  @@index([userId])
+}
+
+enum InterviewStatus {
+  PENDING     // created, not started
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum RoundType {
+  CODING
+  APTITUDE
+  HR
+  COMMUNICATION
+  SYSTEM_DESIGN
+  GENERAL
+  VC_PITCH
+}
+
+model Interview {
+  id            String          @id @default(cuid())
+  userId        String
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  jobTitle      String
+  companyName   String?
+  jobDescription String         @db.Text
+  resumeText    String?         @db.Text
+
+  roundType        RoundType    @default(GENERAL)
+  durationMinutes  Int          @default(30)
+
+  status        InterviewStatus @default(PENDING)
+
+  questions     Question[]
+
+  createdAt     DateTime        @default(now())
+  completedAt   DateTime?
+
+  @@index([userId])
+}
+
+model Question {
+  id            String     @id @default(cuid())
+  interviewId   String
+  interview     Interview  @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+
+  order         Int
+  questionText  String     @db.Text
+  answerText    String?    @db.Text
+  askedAt       DateTime   @default(now())
+  answeredAt    DateTime?
+
+  @@index([interviewId])
+}
